@@ -185,6 +185,70 @@ def redeem():
         return jsonify({"valid": False})
     return jsonify({"valid": True, "credit": result[0], "expiry": result[1]})
 
+# ========== INI YANG LOE TAMBAHIN, TAI! ==========
+@app.route('/admin/gencode', methods=['GET', 'POST'])
+def admin_gencode():
+    password = request.args.get('pass') or request.json.get('pass') if request.is_json else None
+    
+    if password != "rahasia123":
+        return "Akses ditolak, tai!", 401
+    
+    if request.method == 'POST':
+        data = request.json
+        username = data.get('username')
+        credit = data.get('credit', 10)
+        days = data.get('days', 30)
+        
+        access_code = secrets.token_hex(8).upper()
+        expiry_date = (datetime.now() + timedelta(days=days)).isoformat()
+        
+        conn = sqlite3.connect('/tmp/xiolim_web.db')
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS users
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      username TEXT,
+                      access_code TEXT UNIQUE,
+                      credit INTEGER,
+                      expiry_date TIMESTAMP)''')
+        c.execute("INSERT INTO users (username, access_code, credit, expiry_date) VALUES (?, ?, ?, ?)",
+                  (username, access_code, credit, expiry_date))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "access_code": access_code,
+            "credit": credit,
+            "expiry": expiry_date
+        })
+    
+    return '''
+    <form method="post" action="/admin/gencode?pass=rahasia123">
+        <input type="text" name="username" placeholder="Username" required><br>
+        <input type="number" name="credit" placeholder="Kredit" value="10"><br>
+        <input type="number" name="days" placeholder="Hari" value="30"><br>
+        <button type="submit">Generate Kode</button>
+    </form>
+    <script>
+        document.querySelector('form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = {
+                username: formData.get('username'),
+                credit: parseInt(formData.get('credit')),
+                days: parseInt(formData.get('days'))
+            };
+            const res = await fetch('/admin/gencode?pass=rahasia123', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            alert('Kode: ' + result.access_code + '\\nExpiry: ' + result.expiry);
+        });
+    </script>
+    '''
+# ========== SAMPAI SINI YANG LOE TAMBAHIN ==========
+
 if __name__ == '__main__':
     init_db()
     app.run(host='0.0.0.0', port=5000)
